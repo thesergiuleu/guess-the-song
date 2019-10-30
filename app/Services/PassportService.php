@@ -27,9 +27,9 @@ class PassportService
             return json_decode($response->getBody(), true);
         } catch (\Exception  $exception) {
             if ($exception->getCode() === 400) {
-                return response_fail('Invalid Request. Please enter a username or a password',$exception->getCode());
+                return response_fail('Invalid Request. Please enter a username or a password', $exception->getCode());
             } elseif ($exception->getCode() === 401) {
-                return response_fail('Your credentials are incorrect. Please try again',$exception->getCode());
+                return response_fail('Your credentials are incorrect. Please try again', $exception->getCode());
             }
             return response_fail(['message' => $exception->getMessage()], $exception->getCode());
         }
