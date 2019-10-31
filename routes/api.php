@@ -17,14 +17,13 @@ use Illuminate\Support\Facades\Route;
 Route::post('/register', 'Auth\AuthController@register');
 Route::post('/login', 'Auth\AuthController@login');
 
+Route::group(['prefix' => 'game'], function () {
+    Route::get('tracks', 'GameController@index');
+    Route::post('guess', 'GuessController@store');
+});
 #Auth routes
 Route::group(['middleware' => ['auth:api']], function () {
     Route::get('/', function () {
         return 'Success';
     });
-    Route::group(['prefix' => 'game'], function () {
-        Route::get('tracks', 'GameController@index');
-        Route::post('guess', 'GuessController@store');
-    });
-
 });
