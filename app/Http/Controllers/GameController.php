@@ -24,17 +24,13 @@ class GameController extends Controller
     }
 
     /**
-     * Return the playing song and the three guess inputs
+     * Return all songs
      *
      * @return \Illuminate\Http\JsonResponse
      */
     public function index()
     {
-        return response_ok([
-            'answers'       => $this->gameService->getTracks()['answers'],
-            'preview_url'   => $this->gameService->getTracks()['preview_url'],
-            'track_id'      => $this->gameService->getTracks()['track_id'],
-        ]);
+        return response_ok($this->gameService->getTracks());
     }
 
     /**

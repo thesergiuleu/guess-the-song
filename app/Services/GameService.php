@@ -1,14 +1,9 @@
 <?php
 
-
 namespace App\Services;
 
-
-use App\Song;
-use App\User;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Request;
+use App\{ Song, User };
+use Illuminate\Support\Facades\{ Auth, Request };
 
 class GameService
 {
@@ -27,7 +22,6 @@ class GameService
     {
         $this->spotifyService = $spotifyService;
         $this->request        = $request;
-
     }
 
     /**
@@ -38,24 +32,49 @@ class GameService
         $this->data = $data;
     }
 
+    /**
+     * Return current score of player, and saves user/song data if user is logged in
+     *
+     * @return float|mixed
+     */
     public function handleDatabaseActions()
     {
-        $lastScore      = ceil((30 - $this->data['time']) / 3); # Work out the number of points to add or subtract on this round
+        $score      = ceil((30 - $this->data['time']) / 3); # Work out the number of points to add or subtract on this round
         $currentUser    = Auth::guard('api')->user();
         if ($currentUser) {
-            if ((string)$this->data['answer'] === (string)session('answer')) {
+            if ($this->data['is_correct']) {
                 $song = Song::whereSpotifySongId($this->data['answer'])->first();
                 if (!$song) {
-                    $track = $this->spotifyService->getSpotifyApi()->getTrack($this->data['answer']);
-                    $song = $this->prepareFieldsToSaveASong($track)->save();
+                    $track  = $this->spotifyService->getSpotifyApi()->getTrack($this->data['answer']);
+                    $song   = $this->prepareFieldsToSaveASong($track);
+                    $song->save();
                 }
-                $currentUser->songs->updateExistingPivot('song_id', ['user_id' => $currentUser->id]);
+                $currentUser->songs()->syncWithoutDetaching($song->id);
             }
-            $this->updateUserData($currentUser, $lastScore);
+
+            $this->updateUserData($currentUser, $score);
+
+            return $currentUser->score;
         }
-        $message = 'Right';
+
+        return $this->data['last_score'] + $score;
     }
 
+    /**
+     * Get 100 songs from spotify API
+     *
+     * @return array
+     */
+    public function getTracks()
+    {
+        $spotifyChart = $this->spotifyService->getSpotifyApi()->getPlaylistTracks('37i9dQZF1DX5Ejj0EkURtP');
+
+        $tracks = collect($spotifyChart->items)->reject(function($track) {
+            return $this->_trackHasNoPreview($track->track) || $this->_trackHaveBeenGuessed($track->track);
+        })->shuffle();
+
+        return ['tracks' => $tracks];
+    }
     /**
      * Get Song fields ready to be saved
      *
@@ -68,8 +87,10 @@ class GameService
         $song->name         = $track->name;
         $song->album        = $track->album->name;
         $song->preview_url  = $track->preview_url;
+        $song->preview_url  = $track->preview_url;
         $song->spotify_url  = $track->external_urls->spotify;
         $song->artist       = format_to_string($track->artists, 'name');
+        $song->spotify_song_id       = $track->id;
 
         return $song;
     }
@@ -77,7 +98,7 @@ class GameService
     private function updateUserData(User $user, $score)
     {
         $user->seen_songs       = $user->seen_songs + 1;
-        if ((string)$this->data['answer'] === (string)session('answer')) {
+        if ($this->data['is_correct']) {
             $user->guessed_songs    = $user->guessed_songs + 1;
             $user->score            = $user->score + $score;
         } else {
@@ -86,45 +107,6 @@ class GameService
 
         $user->save();
     }
-
-    public function getTracks()
-    {
-        if (!Cache::has('playlist')) {
-            Cache::put(
-                'playlist',
-                $this->spotifyService->getSpotifyApi()->getPlaylistTracks('37i9dQZF1DX5Ejj0EkURtP'),
-                2
-            );
-        }
-        $spotifyChart = Cache::get('playlist');
-
-        $recent = (Cache::has('recent_songs') ? Cache::get('recent_songs') : collect());
-        $tracks = collect($spotifyChart->items)->reject(function($track) use ($recent) {
-            return $this->_trackHasNoPreview($track->track) || $this->_trackIsRecent($track->track->id);
-        })->shuffle()->take(3);
-
-        $correctTrack   = $tracks->first();
-        $correctAnswer  = $correctTrack->track->id;
-        $recent         = $recent->push($correctAnswer);
-
-        # Make sure we only store the last 20
-//        if ($recent->count() >= 20) {
-//            $recent = $recent->slice(1,20)->values();
-//        }
-        Cache::put(
-            'recent_songs',
-            $recent,
-            5
-        );
-        $answers = $tracks->shuffle();
-
-        return [
-            'answers'        => $answers,
-            'track_id'       => $correctAnswer,
-            'preview_url'    => $correctTrack->track->preview_url
-        ];
-    }
-
     /**
      * Test to see if a track has a valid preview URL
      *
@@ -137,14 +119,16 @@ class GameService
     }
 
     /**
-     * Test to see if a track has been recently used as a correct answer
+     * Test to see if logged user already guessed this song
      *
-     * @param $trackId
+     * @param $track
      * @return bool
      */
-    private function _trackIsRecent($trackId)
+    private function _trackHaveBeenGuessed($track)
     {
-        $recent = (Cache::has('recent_songs') ? Cache::get('recent_songs') : collect());
-        return $recent->contains($trackId);
+        if ($user = Auth::guard('api')->user()) {
+            return $user->songs()->where('spotify_song_id', $track->id)->exists();
+        }
+        return false;
     }
 }

@@ -2,34 +2,28 @@
 
 namespace App\Http\Controllers;
 
-use App\Services\GameService;
-use App\Services\SpotifyService;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Cache;
+use App\Http\Requests\GuessRequest;
+use App\Services\{ GameService, SpotifyService };
+use Illuminate\Support\Facades\Auth;
 
 class GuessController extends Controller
 {
-    /**
-     * @var Request
-     */
-    private $request;
     /**
      * @var SpotifyService
      */
     private $spotifyService;
     /**
-     * @var \Illuminate\Contracts\Auth\Authenticatable|null
-     */
-    private $currentUser;
-    /**
      * @var GameService
      */
     private $gameService;
+    /**
+     * @var GuessRequest
+     */
+    private $guessRequest;
 
-    public function __construct(Request $request, SpotifyService $spotifyService, GameService $gameService)
+    public function __construct(GuessRequest $guessRequest, SpotifyService $spotifyService, GameService $gameService)
     {
-
-        $this->request          = $request;
+        $this->guessRequest     = $guessRequest;
         $this->spotifyService   = $spotifyService;
         $this->gameService      = $gameService;
     }
@@ -41,16 +35,11 @@ class GuessController extends Controller
      */
     public function store()
     {
-        dd(Cache::getStore());
+        $this->gameService->setData(
+            $this->guessRequest->only(['answer', 'time', 'is_correct', 'last_score'])
+        );
 
-        $data = $this->request->only(['answer', 'time']);
-        $this->gameService->setData($data);
-        $this->gameService->handleDatabaseActions();
-
-//        return response_ok([
-//            'last_score'    => $lastScore,
-//            'message'       => $message,
-//        ]);
+        return response_ok(["score" => $this->gameService->handleDatabaseActions()]);
     }
 
 

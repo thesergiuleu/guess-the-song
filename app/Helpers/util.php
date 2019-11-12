@@ -1,10 +1,11 @@
 <?php
 
+use Illuminate\Http\JsonResponse;
 /**
  * Get the response in case of success
  *
  * @param string $message
- * @return \Illuminate\Http\JsonResponse
+ * @return JsonResponse
  */
 function response_ok($message = 'ok')
 {
@@ -18,7 +19,7 @@ function response_ok($message = 'ok')
  *
  * @param int $code
  * @param mixed $message
- * @return \Illuminate\Http\JsonResponse
+ * @return JsonResponse
  */
 function response_fail($message = 'not_allowed', $code = 403)
 {
